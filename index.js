@@ -1,200 +1,149 @@
-import readline from 'readline';
-import { Cliente } from './Cliente.js';
-import { Gerente } from './Funcionario/Gerente.js';
-import { Diretor } from './Funcionario/Diretor.js';
-import { SistemaAutenticacao } from './SistemaAutenticacao.js';
+import { Cliente } from "./Cliente.js";
+import { Gerente } from "./Funcionario/Gerente.js";
+import{ContaCorrente} from "./Conta/ContaCorrente.js"
+import { SistemaAutenticacao } from "./SistemaAutenticacao.js";
+import readlineSync from "readline-sync";
+// Forçar a codificação de saída para UTF-8
+process.stdout.setEncoding('utf8');
+// Lista de usuários (inicializada com um gerente e um cliente para exemplo)
+let usuarios = [];
 
-import { Conta } from "./Conta/Conta.js";
-import { ContaCorrente } from "./Conta/ContaCorrente.js";
-import { ContaPoupanca } from './Conta/ContaPoupanca.js';
-import { ContaSalario } from './Conta/ContaSalario.js';
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-const usuarios = [];
-const contas = [];
-
-function perguntar(pergunta) {
-  return new Promise(resolve => rl.question(pergunta, resposta => resolve(resposta)));
+// Função para perguntar ao usuário
+async function perguntar(pergunta) {
+    return readlineSync.question(pergunta);
 }
 
-async function criarUsuario() {
-  const tipo = await perguntar("Tipo de usuário (cliente/gerente/diretor): ");
-  const nome = await perguntar("Nome: ");
-  const salario = tipo !== 'cliente' ? await perguntar("Salário: ") : null;
-  const cpf = await perguntar("CPF: ");
-  const senha = await perguntar("Senha: ");
+// Variável para armazenar o usuário logado
+let usuarioLogado = null;
 
-  let usuario;
-  switch (tipo.toLowerCase()) {
-    case 'cliente':
-      usuario = new Cliente(nome, cpf, senha);
-      break;
-    case 'gerente':
-      usuario = new Gerente(nome, parseFloat(salario), cpf);
-      usuario.cadastrarSenha(senha);
-      break;
-    case 'diretor':
-      usuario = new Diretor(nome, parseFloat(salario), cpf);
-      usuario.cadastrarSenha(senha);
-      break;
-    default:
-      console.log("Tipo inválido.\n");
-      return;
-  }
+// Criando um Gerente e um Cliente iniciais
+const gerente = new Gerente("Ricardo", 5000, "12378945601");
+gerente.cadastrarSenha("123");
+usuarios.push(gerente);
 
-  usuarios.push(usuario);
-  console.log(`${tipo} ${nome} criado com sucesso!\n`);
-}
+const cliente = new Cliente("Lais", "78945612379", "456");
+const contaCliente = new ContaCorrente(cliente, "456", 0);
+usuarios.push(cliente);
+usuarios.push(contaCliente);
 
-async function criarContaParaCliente() {
-  const cpf = await perguntar("CPF do cliente: ");
-  const cliente = usuarios.find(u => u._cpf === cpf && u.constructor.name === 'Cliente');
-
-  if (!cliente) {
-    console.log("Cliente não encontrado.\n");
-    return;
-  }
-
-  const agencia = await perguntar("Agência: ");
-  const tipo = await perguntar("Tipo da conta (corrente/poupanca/salario): ").toLowerCase();
-
-  let conta;
-  switch (tipo) {
-    case 'corrente':
-      conta = new ContaCorrente(cliente, agencia);
-      break;
-    case 'poupanca':
-      conta = new ContaPoupanca(cliente, agencia);
-      break;
-    case 'salario':
-      conta = new ContaSalario(cliente, agencia);
-      break;
-    default:
-      console.log("Tipo de conta inválido.\n");
-      return;
-  }
-
-  contas.push(conta);
-  console.log(`Conta ${tipo} criada com sucesso!\n`);
-}
-
+// Função para fazer o login
 async function fazerLogin() {
-  const cpf = await perguntar("CPF: ");
-  const senha = await perguntar("Senha: ");
+    const cpf = await perguntar("CPF: ");
+    const senha = await perguntar("Senha: ");
 
-  const usuario = usuarios.find(u => u._cpf === cpf);
-  if (!usuario) {
-    console.log("Usuário não encontrado.\n");
-    return;
-  }
+    const cliente = usuarios.find(u => u._cpf === cpf && u instanceof Cliente);
+    if (cliente) {
+        const autenticado = SistemaAutenticacao.login(cliente, senha);
 
-  const autenticado = SistemaAutenticacao.login(usuario, senha);
-  console.log(autenticado ? "Login bem-sucedido.\n" : "Falha na autenticação.\n");
-}
-
-async function sacarDeConta() {
-  const cpf = await perguntar("CPF: ");
-  const conta = contas.find(c => c.cliente._cpf === cpf);
-
-  if (!conta) {
-    console.log("Conta não encontrada.\n");
-    return;
-  }
-
-  const valor = parseFloat(await perguntar("Valor a sacar: "));
-  const resultado = conta.sacar(valor);
-  console.log(resultado > 0 ? `Saque de R$${resultado} realizado.` : "Saldo insuficiente.");
-}
-
-async function depositarEmConta() {
-  const cpf = await perguntar("CPF: ");
-  const conta = contas.find(c => c.cliente._cpf === cpf);
-
-  if (!conta) {
-    console.log("Conta não encontrada.\n");
-    return;
-  }
-
-  const valor = parseFloat(await perguntar("Valor a depositar: "));
-  conta.depositar(valor);
-  console.log("Depósito realizado.");
-}
-
-async function transferirEntreContas() {
-  const cpfOrigem = await perguntar("CPF da conta origem: ");
-  const contaOrigem = contas.find(c => c.cliente._cpf === cpfOrigem);
-
-  if (!contaOrigem) {
-    console.log("Conta origem não encontrada.\n");
-    return;
-  }
-
-  const cpfDestino = await perguntar("CPF da conta destino: ");
-  const contaDestino = contas.find(c => c.cliente._cpf === cpfDestino);
-
-  if (!contaDestino) {
-    console.log("Conta destino não encontrada.\n");
-    return;
-  }
-
-  const valor = parseFloat(await perguntar("Valor da transferência: "));
-  contaOrigem.tranferir(valor, contaDestino);
-  console.log("Transferência realizada.");
-}
-
-async function consultarSaldo() {
-  const cpf = await perguntar("CPF: ");
-  const conta = contas.find(c => c.cliente._cpf === cpf);
-
-  if (!conta) {
-    console.log("Conta não encontrada.\n");
-    return;
-  }
-
-  console.log(`Saldo atual: R$${conta.saldo.toFixed(2)}\n`);
-}
-
-function listarContas() {
-  contas.forEach((c, i) => {
-    console.log(`${i + 1}. Cliente: ${c.cliente.nome} | Agência: ${c._agencia} | Saldo: R$${c.saldo}`);
-  });
-  console.log();
-}
-
-async function exibirMenu() {
-  let sair = false;
-
-  while (!sair) {
-    console.log("=== MENU BANCO ===");
-    console.log("1. Criar usuário");
-    console.log("2. Criar conta");
-    console.log("3. Fazer login");
-    console.log("4. Sacar");
-    console.log("5. Depositar");
-    console.log("6. Transferir");
-    console.log("7. Consultar saldo");
-    console.log("8. Listar contas");
-    console.log("9. Sair");
-
-    const opcao = await perguntar("Escolha uma opção: ");
-
-    switch (opcao) {
-      case '1': await criarUsuario(); break;
-      case '2': await criarContaParaCliente(); break;
-      case '3': await fazerLogin(); break;
-      case '4': await sacarDeConta(); break;
-      case '5': await depositarEmConta(); break;
-      case '6': await transferirEntreContas(); break;
-      case '7': await consultarSaldo(); break;
-      case '8': listarContas(); break;
-      case '9': sair = true; rl.close(); break;
-      default: console.log("Opção inválida.\n");
+        if (autenticado) {
+            usuarioLogado = cliente;
+            console.log(`✅ Login bem-sucedido como ${cliente.nome} (Cliente).\n`);
+        } else {
+            console.log("❌ Falha na autenticação.");
+            if (cliente._bloqueado) {
+                console.log("Você deve procurar um gerente para desbloquear sua conta.");
+            }
+        }
+    } else {
+        const funcionario = usuarios.find(u => u._cpf === cpf && (u instanceof Gerente || u instanceof Diretor));
+        if (funcionario) {
+            const autenticado = SistemaAutenticacao.login(funcionario, senha);
+            if (autenticado) {
+                usuarioLogado = funcionario;
+                console.log(`✅ Login bem-sucedido como ${funcionario.nome} (${funcionario.constructor.name}).\n`);
+                if (funcionario instanceof Gerente) {
+                    console.log(`Bonificação: R$ ${funcionario.bonificacao.toFixed(2)}\n`);
+                }
+            } else {
+                console.log("❌ Falha na autenticação.");
+            }
+        } else {
+            console.log("❌ Usuário não encontrado.");
+        }
     }
-  }
 }
 
-exibirMenu();
+// Função para fazer logout
+async function fazerLogout() {
+    usuarioLogado = null;
+    console.log("🔓 Você foi desconectado.");
+}
+
+// Função para consultar o saldo do cliente
+async function consultarSaldo() {
+    if (usuarioLogado instanceof Cliente) {
+        console.log(`Saldo: R$ ${usuarioLogado.saldo}`);
+    }
+}
+
+// Função para desbloquear cliente pelo gerente
+async function desbloquearConta() {
+    if (!(usuarioLogado instanceof Gerente)) {
+        console.log("❌ Apenas gerentes podem desbloquear contas.");
+        return;
+    }
+
+    const cpfCliente = await perguntar("Digite o CPF do cliente a ser desbloqueado: ");
+    const cliente = usuarios.find(u => u._cpf === cpfCliente && u instanceof Cliente);
+
+    if (cliente) {
+        if (cliente._bloqueado) {
+            usuarioLogado.desbloquear(cliente);
+            console.log(`✅ Conta do cliente ${cliente.nome} desbloqueada.`);
+        } else {
+            console.log("❌ Conta já está desbloqueada.");
+        }
+    } else {
+        console.log("❌ Cliente não encontrado.");
+    }
+}
+
+// Função principal do menu
+async function main() {
+    let opcao = '';
+    while (opcao !== '0') {
+        console.log("\n=== MENU BANCO ===");
+
+        if (!usuarioLogado) {
+            console.log("1. Login");
+            console.log("0. Sair");
+            opcao = await perguntar("Escolha uma opção: ");
+
+            switch (opcao) {
+                case '1': await fazerLogin(); break;
+                case '0': console.log("👋 Saindo..."); break;
+                default: console.log("❌ Opção inválida.");
+            }
+        } else {
+            console.log(`🔒 Logado como: ${usuarioLogado.nome} (${usuarioLogado.constructor.name})`);
+
+            if (usuarioLogado instanceof Cliente) {
+                console.log("1. Consultar saldo");
+                console.log("2. Logout");
+                console.log("0. Sair");
+                opcao = await perguntar("Escolha uma opção: ");
+                
+                switch (opcao) {
+                    case '1': await consultarSaldo(); break;
+                    case '2': await fazerLogout(); break;
+                    case '0': console.log("👋 Saindo..."); break;
+                    default: console.log("❌ Opção inválida.");
+                }
+            } else if (usuarioLogado instanceof Gerente) {
+                console.log("1. Desbloquear cliente");
+                console.log("2. Logout");
+                console.log("0. Sair");
+                opcao = await perguntar("Escolha uma opção: ");
+                
+                switch (opcao) {
+                    case '1': await desbloquearConta(); break;
+                    case '2': await fazerLogout(); break;
+                    case '0': console.log("👋 Saindo..."); break;
+                    default: console.log("❌ Opção inválida.");
+                }
+            }
+        }
+    }
+}
+
+main();

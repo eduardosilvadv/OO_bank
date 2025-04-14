@@ -5,7 +5,7 @@ export class Conta {
             throw new Error("Você não pode instanciar diretamente a classe Conta.");
         }
 
-        this._saldo = saldoInicial;
+        this._saldo = saldoInicial || 0;
         this._cliente = cliente;
         this._agencia = agencia;
     }
